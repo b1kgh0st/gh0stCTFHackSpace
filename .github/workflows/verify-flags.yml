@@ -1,11 +1,10 @@
-name: Verify Flags & Update Leaderboard
+name: Verify Flags
 
 on:
   pull_request_target:
     types: [opened, synchronize]
 
 permissions:
-  contents: write
   pull-requests: write
 
 jobs:
@@ -16,21 +15,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          
+
       - name: Verify submitted flags
         env:
           CTF_SECRET: ${{ secrets.CTF_SECRET }}
         run: python3 verify_flags.py
 
-      - name: Update Leaderboard
-        run: python3 update_leaderboard.py
-
-      - name: Commit leaderboard changes
-        run: |
-          git config user.name "gh0stCTF Bot"
-          git config user.email "bot@gh0stctf.com"
-          git checkout -B temp-leaderboard-update || true
-          git add leaderboard/
-          git commit -m "Update leaderboard [bot]" || echo "No changes"
-          git push origin temp-leaderboard-update:refs/heads/main --force
+      - name: Post result as comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            **Flag Verification Complete**
+            The bot has checked your submission.
+            See the workflow logs for detailed results.
