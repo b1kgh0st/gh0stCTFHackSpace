@@ -17,7 +17,8 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           token: ${{ secrets.GITHUB_TOKEN }}
-
+          fetch-depth: 0
+          
       - name: Verify submitted flags
         env:
           CTF_SECRET: ${{ secrets.CTF_SECRET }}
@@ -30,6 +31,7 @@ jobs:
         run: |
           git config user.name "gh0stCTF Bot"
           git config user.email "bot@gh0stctf.com"
+          git checkout -b temp-branch
           git add leaderboard/
           git commit -m "Update leaderboard [bot]" || echo "No changes"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin temp-branch:${{ github.event.pull_request.head.ref }}
