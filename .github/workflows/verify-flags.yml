@@ -29,10 +29,7 @@ jobs:
           CTF_SECRET: ${{ secrets.CTF_SECRET }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: python3 verify_flags.py      
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          run: python3 verify_flags.py
+        run: python3 verify_flags.py
 
       - name: Update Leaderboard        
         run: python3 update_leaderboard.py      
