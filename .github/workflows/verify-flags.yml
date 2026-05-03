@@ -20,13 +20,3 @@ jobs:
         env:
           CTF_SECRET: ${{ secrets.CTF_SECRET }}
         run: python3 verify_flags.py
-
-      - name: Post result comment
-        uses: peter-evans/create-or-update-comment@v4
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            **✅ Flag Verification Complete**
-
-            The bot has checked your flags.
-            Check the "Actions" tab for detailed results.
