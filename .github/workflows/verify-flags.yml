@@ -35,4 +35,4 @@ jobs:
           
           git add leaderboard/
           git commit -m "Update leaderboard [bot]" || echo "No changes"
-          git push origin main
+          git push origin HEAD:main
