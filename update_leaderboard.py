@@ -1,23 +1,49 @@
 import json
 from pathlib import Path
 
-leaderboard = []
-for f in Path("leaderboard").glob("*.json"):
-    with open(f) as file:
-        leaderboard.append(json.load(file))
+def generate_global_leaderboard():
+    leaderboard_dir = Path("leaderboard")
+    
+    # Ensure the directory exists
+    if not leaderboard_dir.exists():
+        print("No leaderboard directory found. Nothing to update.")
+        return
 
-leaderboard.sort(key=lambda x: (-x["score"], x.get("timestamp","")))
+    players = []
+    
+    # 1. Read all individual player JSON files
+    for filepath in leaderboard_dir.glob("*.json"):
+        if filepath.name == "global_leaderboard.json":
+            continue # Skip the master file if it already exists
+            
+        try:
+            with open(filepath, "r") as f:
+                data = json.load(f)
+                # Ensure the data has the required fields
+                if "username" in data and "score" in data:
+                    players.append(data)
+        except Exception as e:
+            print(f"Error reading {filepath.name}: {e}")
 
-html = """<!DOCTYPE html>
-<html><head><title>gh0stCTFHackSpace Leaderboard</title>
-<script src="https://cdn.tailwindcss.com"></script></head>
-<body class="bg-black text-green-400 font-mono p-8">
-<h1 class="text-5xl mb-8">👻 LEADERBOARD</h1>
-<table class="w-full border-collapse">
-<tr><th class="text-left p-4 border-b">Rank</th><th class="text-left p-4 border-b">Player</th><th class="text-left p-4 border-b">Solved</th><th class="text-left p-4 border-b">Score</th></tr>"""
-for i, entry in enumerate(leaderboard, 1):
-    html += f'<tr><td class="p-4 border-b">{i}</td><td class="p-4 border-b">{entry["username"]}</td><td class="p-4 border-b">{entry["solved"]}</td><td class="p-4 border-b font-bold">{entry["score"]}/5</td></tr>\n'
-html += "</table></body></html>"
+    # 2. Sort the players by score (highest to lowest)
+    # If you want to add a tie-breaker (like submission time), you would add it here
+    players.sort(key=lambda x: x.get("score", 0), reverse=True)
 
-Path("leaderboard/index.html").write_text(html)
-print("Leaderboard updated")
+    # 3. Assign ranks (properly handling ties)
+    current_rank = 1
+    for i, player in enumerate(players):
+        # If this isn't the first player, and their score is lower than the previous player's, increase the rank
+        if i > 0 and player.get("score") < players[i-1].get("score"):
+            current_rank = i + 1
+        
+        player["rank"] = current_rank
+
+    # 4. Save the aggregated master list
+    master_file = leaderboard_dir / "global_leaderboard.json"
+    with open(master_file, "w") as f:
+        json.dump({"leaderboard": players}, f, indent=2)
+        
+    print(f"Successfully aggregated {len(players)} players into global_leaderboard.json")
+
+if __name__ == "__main__":
+    generate_global_leaderboard()
