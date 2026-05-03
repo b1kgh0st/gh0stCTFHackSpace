@@ -1,0 +1,32 @@
+name: Verify Flags
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Verify submitted flags
+        env:
+          CTF_SECRET: ${{ secrets.CTF_SECRET }}
+        run: python3 verify_flags.py
+
+      - name: Post result comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            **✅ Flag Verification Complete**
+
+            The bot has checked your flags.
+            Check the "Actions" tab for detailed results.
