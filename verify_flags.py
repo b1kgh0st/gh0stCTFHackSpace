@@ -1,18 +1,21 @@
 import os
-import hashlib
 import json
+import hashlib
 import sys
-import urllib.request
 from pathlib import Path
+import urllib.request
 
-# 1. Load Environment Variables injected by GitHub Actions
+# Load Environment Variables
 try:
     SECRET = os.environ["CTF_SECRET"]
+    AUTHOR = os.environ["ISSUE_AUTHOR"]
+    ISSUE_NUMBER = os.environ["ISSUE_NUMBER"]
+    REPO = os.environ["GITHUB_REPOSITORY"]
     GH_TOKEN = os.environ["GH_TOKEN"]
-    PR_NUMBER = os.environ["PR_NUMBER"]
-    REPO = os.environ["GITHUB_REPOSITORY"] # e.g., "username/gh0stCTF"
+    # GitHub saves the entire event payload to a JSON file locally
+    EVENT_PATH = os.environ["GITHUB_EVENT_PATH"] 
 except KeyError as e:
-    print(f"Missing required environment variable: {e}")
+    print(f"Missing env var: {e}")
     sys.exit(1)
 
 CHALLENGES = {
@@ -23,77 +26,69 @@ CHALLENGES = {
     5: hashlib.sha256((SECRET + "void_overflow").encode()).hexdigest()[:32],
 }
 
-def fetch_pr_submission_data():
-    """Fetches the changed files from the PR via the GitHub API."""
-    url = f"https://api.github.com/repos/{REPO}/pulls/{PR_NUMBER}/files"
-    req = urllib.request.Request(url, headers={
+def close_and_comment(message):
+    """Uses the GitHub API to comment on and close the issue."""
+    url = f"https://api.github.com/repos/{REPO}/issues/{ISSUE_NUMBER}/comments"
+    req = urllib.request.Request(url, method="POST", headers={
         "Authorization": f"Bearer {GH_TOKEN}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-    })
+        "Accept": "application/vnd.github+json"
+    }, data=json.dumps({"body": message}).encode("utf-8"))
+    urllib.request.urlopen(req)
+
+    # Close the issue
+    close_url = f"https://api.github.com/repos/{REPO}/issues/{ISSUE_NUMBER}"
+    close_req = urllib.request.Request(close_url, method="PATCH", headers={
+        "Authorization": f"Bearer {GH_TOKEN}",
+        "Accept": "application/vnd.github+json"
+    }, data=json.dumps({"state": "closed"}).encode("utf-8"))
+    urllib.request.urlopen(close_req)
+
+def process_issue():
+    # Read the issue body securely from the event payload
+    with open(EVENT_PATH, 'r') as f:
+        event_data = json.load(f)
     
+    issue_body = event_data['issue']['body']
+    
+    # Very basic parsing (You can make this more robust)
+    # Expecting format:
+    # Challenge: 1
+    # Flag: 12345abcdef
     try:
-        with urllib.request.urlopen(req) as response:
-            files_data = json.loads(response.read().decode())
-    except Exception as e:
-        print(f"Error fetching PR file list: {e}")
-        sys.exit(1)
+        lines = issue_body.replace('\r', '').split('\n')
+        cid = int(lines[0].split(':')[1].strip())
+        submitted_flag = lines[1].split(':')[1].strip()
+    except Exception:
+        close_and_comment("❌ Invalid format. Please use:\nChallenge: <ID>\nFlag: <Hash>")
+        sys.exit(0)
 
-    # Filter for JSON files that were added or modified
-    # (You can add `and f['filename'].startswith('submissions/')` if needed)
-    submission_files = [f for f in files_data if f['filename'].endswith('.json') and f['status'] in ['added', 'modified']]
-
-    if not submission_files:
-        print("No JSON submission files found in this PR. Skipping.")
-        sys.exit(0) # Exit cleanly so the workflow doesn't fail, just skips
-
-    # Fetch the actual content of the first matching file
-    raw_url = submission_files[0]['raw_url']
-    req_raw = urllib.request.Request(raw_url, headers={
-        "Authorization": f"Bearer {GH_TOKEN}"
-    })
-
-    try:
-        with urllib.request.urlopen(req_raw) as response:
-            content = response.read().decode()
-            return json.loads(content)
-    except Exception as e:
-        print(f"Error reading raw submission data: {e}")
-        sys.exit(1)
-
-def verify_submission(data):
-    """Verifies the parsed JSON data against the challenge hashes."""
-    username = data.get("username")
-    if not username:
-        print("Error: Submission missing 'username' field.")
-        sys.exit(1)
+    # Verify
+    if cid in CHALLENGES and submitted_flag == CHALLENGES[cid]:
+        print(f"Correct flag submitted by {AUTHOR} for Challenge {cid}")
         
-    flags = data.get("flags", {})
-    correct = 0
-    solved = []
-    
-    for cid_str, flag in flags.items():
-        try:
-            cid = int(cid_str)
-        except ValueError:
-            continue # Skip invalid challenge IDs
+        # Load existing user data or create new
+        Path("leaderboard").mkdir(exist_ok=True)
+        user_file = Path(f"leaderboard/{AUTHOR}.json")
+        
+        if user_file.exists():
+            with open(user_file, "r") as f:
+                user_data = json.load(f)
+        else:
+            user_data = {"username": AUTHOR, "solved": [], "score": 0}
             
-        if cid in CHALLENGES and flag.strip() == CHALLENGES[cid]:
-            correct += 1
-            solved.append(cid)
+        # Update if they haven't solved it yet
+        if cid not in user_data["solved"]:
+            user_data["solved"].append(cid)
+            user_data["score"] += 1
             
-    print(f"Verified {username}: {correct}/5")
-    
-    # Save the updated leaderboard data
-    Path("leaderboard").mkdir(exist_ok=True)
-    with open(f"leaderboard/{username}.json", "w") as f:
-        json.dump({"username": username, "solved": solved, "score": correct}, f, indent=2)
+            with open(user_file, "w") as f:
+                json.dump(user_data, f, indent=2)
+                
+            close_and_comment(f"✅ Correct! You have been awarded points for Challenge {cid}.")
+        else:
+            close_and_comment("⚠️ You have already solved this challenge.")
+    else:
+        close_and_comment("❌ Incorrect flag. Keep trying!")
 
 if __name__ == "__main__":
-    print(f"Checking PR #{PR_NUMBER} in {REPO}...")
-    
-    # 1. Fetch data safely via API
-    submission_data = fetch_pr_submission_data()
-    
-    # 2. Process the data and generate leaderboard file
-    verify_submission(submission_data)
+    process_issue()
