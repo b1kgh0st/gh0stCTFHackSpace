@@ -8,7 +8,7 @@
 [👉 Click here](https://b1kgh0st.github.io/gh0stCTFHackSpace/leaderboard/)
 
 **Now, to submit a flag, 
-goto  [GitHub](https://github.com/b1kgh0st/gh0stCTFHackSpace/issues) 
+goto  [👉 Click here](https://github.com/b1kgh0st/gh0stCTFHackSpace/issues) 
 click on new issue and you will see a button that says "Submit a Flag 🚩". 
 When you click it, the formatting is already there you just have to 
 replace the bracketed text with their challenge ID and flag.
