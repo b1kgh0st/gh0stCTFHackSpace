@@ -33,4 +33,4 @@ jobs:
           git config user.email "bot@gh0stctf.com"
           git add leaderboard/
           git commit -m "Update leaderboard [bot]" || echo "No changes"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          git push origin HEAD:refs/heads/${{ github.event.pull_request.head.ref }}
