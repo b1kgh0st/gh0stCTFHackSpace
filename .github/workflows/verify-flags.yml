@@ -1,51 +1,47 @@
-name: Verify Flags & Update Leaderboard
-on:  
-  pull_request_target:    
-    types: [opened, synchronize]
+name: Verify Flag Issue & Update Leaderboard
+on:
+  issues:
+    types: [opened]
 
-# Only request the permissions absolutely necessary
-permissions:  
+permissions:
   contents: write
-  pull-requests: read
+  issues: write # Allows the bot to comment and close the issue
 
-# Add concurrency to prevent Git push conflicts if 2 PRs open at once
 concurrency:
   group: leaderboard-updates
   cancel-in-progress: false
 
-jobs:  
-  verify:    
-    runs-on: ubuntu-latest    
-    steps:      
-      # 1. Checkout the TRUSTED base branch (main)
-      # Do NOT use the PR's sha. 
-      - name: Checkout Trusted Code
+jobs:
+  verify-and-update:
+    # Optional: Only run if the issue has a specific label, or just run on all issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Run the trusted script securely. 
-      # The script should use the PR number to fetch the user's submission via the API.
-      - name: Verify submitted flags
-        env:          
+      - name: Verify Flag from Issue
+        env:
           CTF_SECRET: ${{ secrets.CTF_SECRET }}
+          # Pass the issue details safely to Python
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: python3 verify_flags.py
 
-      - name: Update Leaderboard        
-        run: python3 update_leaderboard.py      
+      - name: Update Leaderboard
+        run: python3 update_leaderboard.py
 
-      # 3. Safely commit and push (no detached HEAD because we checked out main normally)
-      - name: Commit leaderboard changes        
-        run: |          
-          git config user.name "gh0stCTF Bot"          
-          git config user.email "bot@gh0stctf.com"                    
+      - name: Commit Leaderboard Changes
+        run: |
+          git config user.name "gh0stCTF Bot"
+          git config user.email "bot@gh0stctf.com"
           
-          git add leaderboard/          
+          git add leaderboard/
           
-          # Only commit and push if there are actual changes
           if ! git diff-index --quiet HEAD; then
-            git commit -m "Update leaderboard for PR #${{ github.event.pull_request.number }} [bot]"
+            git commit -m "Update leaderboard for Issue #${{ github.event.issue.number }} [bot]"
+            git pull --rebase origin main
             git push origin main
           else
-            echo "No changes to leaderboard."
+            echo "No changes needed."
           fi
